@@ -16,14 +16,14 @@
 /*--------------------------------------------------------------------*/
 // 플레이어
 /*--------------------------------------------------------------------*/
-Star *g_Players[USER_MAX];
+Star g_Players[USER_MAX];
 Star *g_pStar;
 SOCKET sock;
 
 /*--------------------------------------------------------------------*/
 // 함수
 /*--------------------------------------------------------------------*/
-BOOL KeyProcess();
+void KeyProcess();
 void Init();
 void Network();
 void Draw();
@@ -52,6 +52,7 @@ int main()
 	while (1)
 	{
 		Network();
+		KeyProcess();
 		Draw();
 		Sleep(50);
 	}
@@ -121,8 +122,8 @@ void Init()
 void Network()
 {
 	int retval;
-
 	FD_SET Readset;
+
 	FD_ZERO(&Readset);
 	FD_SET(sock, &Readset);
 		
@@ -155,24 +156,39 @@ void Network()
 			case 0 :		
 				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 				{
-					if (g_Players[iCnt] == NULL)
+					if (g_Players[iCnt].ID == 0)
 					{
-						g_Players[iCnt] = new Star;
-						g_Players[iCnt]->ID = packet.ID;
-						g_pStar = g_Players[iCnt];
+						g_Players[iCnt].ID = packet.ID;
+						g_pStar = &g_Players[iCnt];
 						break;
 					}
 				}
 				break;
 
 			case 1 :
-				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
+				///////////////////////////////////////////////////////////////////
+				// 자신의 정보 설정
+				///////////////////////////////////////////////////////////////////
+				if (packet.ID == g_pStar->ID)
 				{
-					if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == packet.ID)
+					g_pStar->x = packet.x;
+					g_pStar->y = packet.y;
+				}
+
+				///////////////////////////////////////////////////////////////////
+				// 다른 플레이어 설정
+				///////////////////////////////////////////////////////////////////
+				else
+				{
+					for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 					{
-						g_Players[iCnt]->x = packet.x;
-						g_Players[iCnt]->y = packet.y;
-						break;
+						if (g_Players[iCnt].ID == 0)
+						{
+							g_Players[iCnt].ID = packet.ID;
+							g_Players[iCnt].x = packet.x;
+							g_Players[iCnt].y = packet.y;
+							break;
+						}
 					}
 				}
 				break;
@@ -184,12 +200,11 @@ void Network()
 			case 3 :
 				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 				{
-					if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == packet.ID &&
-						g_Players[iCnt] != g_pStar)
+					if (g_Players[iCnt].ID != 0 && g_Players[iCnt].ID == packet.ID &&
+						&g_Players[iCnt] != g_pStar)
 					{
-						g_Players[iCnt]->x = packet.x;
-						g_Players[iCnt]->y = packet.y;
-						break;
+						g_Players[iCnt].x = packet.x;
+						g_Players[iCnt].y = packet.y;
 					}
 				}
 				break;
@@ -199,24 +214,6 @@ void Network()
 			}
 		}
 	}
-
-	/*--------------------------------------------------------------------*/
-	// 키입력 패킷처리
-	/*--------------------------------------------------------------------*/
-	if (KeyProcess())
-	{	
-		stPacket packet;
-		packet.type = 3;
-		packet.ID = g_pStar->ID;
-		packet.x = g_pStar->x;
-		packet.y = g_pStar->y;
-		
-		retval = send(sock, (char *)&packet, sizeof(packet), 0);
-		if (retval == SOCKET_ERROR){
-			err_display("send()");
-			Disconnect();
-		}
-	}
 }
 
 /*--------------------------------------------------------------------*/
@@ -224,37 +221,82 @@ void Network()
 /*--------------------------------------------------------------------*/
 void Draw()
 {
+	char cCount = '0';
+
 	Buffer_Clear();
+
+	Sprite_Draw(0, 0, 'C');
+	Sprite_Draw(1, 0, 'l');
+	Sprite_Draw(2, 0, 'i');
+	Sprite_Draw(3, 0, 'e');
+	Sprite_Draw(4, 0, 'n');
+	Sprite_Draw(5, 0, 't');
+	Sprite_Draw(6, 0, ' ');
+	Sprite_Draw(7, 0, 'C');
+	Sprite_Draw(8, 0, 'o');
+	Sprite_Draw(9, 0, 'n');
+	Sprite_Draw(10, 0, 'n');
+	Sprite_Draw(11, 0, 'e');
+	Sprite_Draw(12, 0, 'c');
+	Sprite_Draw(13, 0, 't');
+	Sprite_Draw(14, 0, ' ');
+	Sprite_Draw(15, 0, ':');
+	Sprite_Draw(16, 0, ' ');
 	for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 	{
-		if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID != 0)
-			Sprite_Draw(g_Players[iCnt]->x, g_Players[iCnt]->y, '*');
+		if (g_Players[iCnt].ID != 0)
+		{
+			Sprite_Draw(g_Players[iCnt].x, g_Players[iCnt].y, '*');
+			cCount++;
+		}
 	}
 	
+	Sprite_Draw(17, 0, cCount);
 	Buffer_Flip();
-	
 }
 
 /*--------------------------------------------------------------------*/
 // 키입력 처리
 /*--------------------------------------------------------------------*/
-BOOL KeyProcess()
+void KeyProcess()
 {
+	int retval;
+	stPacket packet;
+
+	if (g_pStar == NULL) return;
+
 	int x = g_pStar->x;
 	int y = g_pStar->y;
 
-	if (GetAsyncKeyState(VK_LEFT) & 0x8000)		x--;
-	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)	x++;
-	if (GetAsyncKeyState(VK_UP) & 0x8000)		y--;
-	if (GetAsyncKeyState(VK_DOWN) & 0x8000)		y++;
+	if (GetAsyncKeyState(VK_LEFT) & 0x8001)		x--;
+	if (GetAsyncKeyState(VK_RIGHT) & 0x8001)	x++;
+	if (GetAsyncKeyState(VK_UP) & 0x8001)		y--;
+	if (GetAsyncKeyState(VK_DOWN) & 0x8001)		y++;
 
 	if (g_pStar->x != x || g_pStar->y != y){
 		g_pStar->x = x;
 		g_pStar->y = y;
-		return TRUE;
-	}
 
-	return FALSE;
+		if (g_pStar->y < 1)
+			g_pStar->y = 1;
+		if (g_pStar->x < 0)
+			g_pStar->x = 0;
+		if (g_pStar->x > dfSCREEN_WIDTH - 2)
+			g_pStar->x = dfSCREEN_WIDTH - 2;
+		if (g_pStar->y > dfSCREEN_HEIGHT - 1)
+			g_pStar->y = dfSCREEN_HEIGHT - 1;
+
+		packet.type = 3;
+		packet.ID = g_pStar->ID;
+		packet.x = g_pStar->x;
+		packet.y = g_pStar->y;
+
+		retval = send(sock, (char *)&packet, sizeof(packet), 0);
+		if (retval == SOCKET_ERROR){
+			err_display("send()");
+			Disconnect();
+		}
+	}
 }
 
 /*--------------------------------------------------------------------*/
