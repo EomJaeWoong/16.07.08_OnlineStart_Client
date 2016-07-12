@@ -1,3 +1,9 @@
+/*--------------------------------------------------------------------*/
+// 
+// OnlineStar_Client.cpp
+// 별 움직이기 클라이언트
+//
+/*--------------------------------------------------------------------*/
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 #include <stdlib.h>
@@ -11,7 +17,7 @@
 // 플레이어
 /*--------------------------------------------------------------------*/
 Star *g_Players[USER_MAX];
-int g_playerID;
+Star *g_pStar;
 SOCKET sock;
 
 /*--------------------------------------------------------------------*/
@@ -47,6 +53,7 @@ int main()
 	{
 		Network();
 		Draw();
+		Sleep(50);
 	}
 
 	return 0;
@@ -139,8 +146,8 @@ void Network()
 			/*--------------------------------------------------------------------*/
 			// 패킷 처리
 			// 0 : ID할당		 (수신)
-			// 1 : 신규접속_자신 (수신)
-			// 2 : 신규접속_타인 (수신)
+			// 1 : 신규접속		 (수신)
+			// 2 : 연결해제
 			// 3 : 이동처리		 (수,발신)
 			/*--------------------------------------------------------------------*/
 			switch (packet.type)
@@ -150,9 +157,9 @@ void Network()
 				{
 					if (g_Players[iCnt] == NULL)
 					{
-						g_playerID = packet.ID;
 						g_Players[iCnt] = new Star;
-						g_Players[iCnt]->ID = g_playerID;
+						g_Players[iCnt]->ID = packet.ID;
+						g_pStar = g_Players[iCnt];
 						break;
 					}
 				}
@@ -165,6 +172,7 @@ void Network()
 					{
 						g_Players[iCnt]->x = packet.x;
 						g_Players[iCnt]->y = packet.y;
+						break;
 					}
 				}
 				break;
@@ -176,10 +184,12 @@ void Network()
 			case 3 :
 				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 				{
-					if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == packet.ID)
+					if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == packet.ID &&
+						g_Players[iCnt] != g_pStar)
 					{
 						g_Players[iCnt]->x = packet.x;
 						g_Players[iCnt]->y = packet.y;
+						break;
 					}
 				}
 				break;
@@ -194,23 +204,12 @@ void Network()
 	// 키입력 패킷처리
 	/*--------------------------------------------------------------------*/
 	if (KeyProcess())
-	{
-		Star* pStar = NULL;
-
-		for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
-		{
-			if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == g_playerID)
-			{
-				pStar = g_Players[iCnt];
-				break;
-			}
-		}
-		
+	{	
 		stPacket packet;
 		packet.type = 3;
-		packet.ID = pStar->ID;
-		packet.x = pStar->x;
-		packet.y = pStar->y;
+		packet.ID = g_pStar->ID;
+		packet.x = g_pStar->x;
+		packet.y = g_pStar->y;
 		
 		retval = send(sock, (char *)&packet, sizeof(packet), 0);
 		if (retval == SOCKET_ERROR){
@@ -233,7 +232,7 @@ void Draw()
 	}
 	
 	Buffer_Flip();
-	Sleep(50);
+	
 }
 
 /*--------------------------------------------------------------------*/
@@ -241,28 +240,17 @@ void Draw()
 /*--------------------------------------------------------------------*/
 BOOL KeyProcess()
 {
-	int retval;
-	Star *pStar = NULL;
+	int x = g_pStar->x;
+	int y = g_pStar->y;
 
-	for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
-	{
-		if (g_Players[iCnt] != NULL && g_Players[iCnt]->ID == g_playerID)
-		{
-			pStar = g_Players[iCnt];
-			break;
-		}
-	}
-	int x = pStar->x;
-	int y = pStar->y;
+	if (GetAsyncKeyState(VK_LEFT) & 0x8000)		x--;
+	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)	x++;
+	if (GetAsyncKeyState(VK_UP) & 0x8000)		y--;
+	if (GetAsyncKeyState(VK_DOWN) & 0x8000)		y++;
 
-	if (GetAsyncKeyState(VK_LEFT) & 0x8001)		x--;
-	if (GetAsyncKeyState(VK_RIGHT) & 0x8001)	x++;
-	if (GetAsyncKeyState(VK_UP) & 0x8001)		y--;
-	if (GetAsyncKeyState(VK_DOWN) & 0x8001)		y++;
-
-	if (pStar != NULL && (pStar->x != x || pStar->y != y)){
-		pStar->x = x;
-		pStar->y = y;
+	if (g_pStar->x != x || g_pStar->y != y){
+		g_pStar->x = x;
+		g_pStar->y = y;
 		return TRUE;
 	}
 
