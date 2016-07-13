@@ -122,95 +122,100 @@ void Init()
 void Network()
 {
 	int retval;
-	FD_SET Readset;
 
-	FD_ZERO(&Readset);
-	FD_SET(sock, &Readset);
-		
-	TIMEVAL Timeval;
-	Timeval.tv_sec = 0;
-	Timeval.tv_usec = 0;
-
-	retval = select(0, &Readset, NULL, NULL, &Timeval);
-
-	if (retval > 0)
+	while (1)
 	{
-		if (FD_ISSET(sock, &Readset))
+		FD_SET Readset;
+		FD_ZERO(&Readset);
+		FD_SET(sock, &Readset);
+
+		TIMEVAL Timeval;
+		Timeval.tv_sec = 0;
+		Timeval.tv_usec = 0;
+
+		retval = select(0, &Readset, NULL, NULL, &Timeval);
+
+		if (retval == 0 || retval == SOCKET_ERROR)	break;
+
+		else if (retval > 0)
 		{
-			stPacket packet;
-			retval = recv(sock, (char *)&packet, sizeof(packet), 0);
-			if (retval == SOCKET_ERROR){
-				err_display("recv()");
-				Disconnect();
-			}
-
-			/*--------------------------------------------------------------------*/
-			// 패킷 처리
-			// 0 : ID할당		 (수신)
-			// 1 : 신규접속		 (수신)
-			// 2 : 연결해제
-			// 3 : 이동처리		 (수,발신)
-			/*--------------------------------------------------------------------*/
-			switch (packet.type)
+			if (FD_ISSET(sock, &Readset))
 			{
-			case 0 :		
-				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
-				{
-					if (g_Players[iCnt].ID == 0)
-					{
-						g_Players[iCnt].ID = packet.ID;
-						g_pStar = &g_Players[iCnt];
-						break;
-					}
-				}
-				break;
-
-			case 1 :
-				///////////////////////////////////////////////////////////////////
-				// 자신의 정보 설정
-				///////////////////////////////////////////////////////////////////
-				if (packet.ID == g_pStar->ID)
-				{
-					g_pStar->x = packet.x;
-					g_pStar->y = packet.y;
+				stPacket packet;
+				retval = recv(sock, (char *)&packet, sizeof(packet), 0);
+				if (retval == SOCKET_ERROR){
+					err_display("recv()");
+					Disconnect();
 				}
 
-				///////////////////////////////////////////////////////////////////
-				// 다른 플레이어 설정
-				///////////////////////////////////////////////////////////////////
-				else
+				/*--------------------------------------------------------------------*/
+				// 패킷 처리
+				// 0 : ID할당		 (수신)
+				// 1 : 신규접속		 (수신)
+				// 2 : 연결해제
+				// 3 : 이동처리		 (수,발신)
+				/*--------------------------------------------------------------------*/
+				switch (packet.type)
 				{
+				case 0:
 					for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
 					{
 						if (g_Players[iCnt].ID == 0)
 						{
 							g_Players[iCnt].ID = packet.ID;
-							g_Players[iCnt].x = packet.x;
-							g_Players[iCnt].y = packet.y;
+							g_pStar = &g_Players[iCnt];
 							break;
 						}
 					}
-				}
-				break;
+					break;
 
-			case 2 :
-				Disconnect();
-				break;
-
-			case 3 :
-				for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
-				{
-					if (g_Players[iCnt].ID != 0 && g_Players[iCnt].ID == packet.ID &&
-						&g_Players[iCnt] != g_pStar)
+				case 1:
+					///////////////////////////////////////////////////////////////////
+					// 자신의 정보 설정
+					///////////////////////////////////////////////////////////////////
+					if (packet.ID == g_pStar->ID)
 					{
-						g_Players[iCnt].x = packet.x;
-						g_Players[iCnt].y = packet.y;
+						g_pStar->x = packet.x;
+						g_pStar->y = packet.y;
 					}
-				}
-				break;
 
-			default:
-				break;
+					///////////////////////////////////////////////////////////////////
+					// 다른 플레이어 설정
+					///////////////////////////////////////////////////////////////////
+					else
+					{
+						for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
+						{
+							if (g_Players[iCnt].ID == 0 && &g_Players[iCnt] != g_pStar)
+							{
+								g_Players[iCnt].ID = packet.ID;
+								g_Players[iCnt].x = packet.x;
+								g_Players[iCnt].y = packet.y;
+								break;
+							}
+						}
+					}
+					break;
+
+				case 2:
+					Disconnect();
+					break;
+
+				case 3:
+					for (int iCnt = 0; iCnt < USER_MAX; iCnt++)
+					{
+						if (g_Players[iCnt].ID != 0 && g_Players[iCnt].ID == packet.ID &&
+							&g_Players[iCnt] != g_pStar)
+						{
+							g_Players[iCnt].x = packet.x;
+							g_Players[iCnt].y = packet.y;
+						}
+					}
+					break;
+
+				default:
+					break;
+				}
 			}
 		}
 	}
